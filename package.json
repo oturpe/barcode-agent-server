@@ -1,0 +1,14 @@
+{
+  "name": "barcodeagent",
+  "subdomain": "barcodeagent",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "version": "0.0.1-3",
+  "engines": {
+    "node": "0.10.x"
+  },
+  "dependencies": {
+    "mongoose": "3.6.20"
+  }
+}
