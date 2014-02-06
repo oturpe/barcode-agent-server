@@ -1,195 +1,359 @@
+// required modules: 
+// npm install mongoose
+// npm install mkdirp
+
 var mongoose = require('mongoose');
 mongoose.connect('mongodb://nodejitsu:5d9bd603b625abe8249cbac6e3625c9a@paulo.mongohq.com:10063/nodejitsudb5597013691');
 
 var util = require('util');
 var querystring = require('querystring');
 var fs = require('fs');
+var http = require('http');
+var mkdirp = require('mkdirp');
 
-console.log('meow');
+console.log('Server start');
+
+var Product = mongoose.model('Product', {
+    barcode: String,
+    name: String,
+    category: String
+});
+var Pictures = mongoose.model('Pictures', {
+    product_id: String,
+    by: String,
+    image_url: String
+});
+var Comment = mongoose.model('Comment', {
+    product_id: String,
+    comment: String,
+    by: String,
+    date: String
+});
+var Flag = mongoose.model('Flag', {
+    product_id: String,
+    flag: String
+});
+
+
+// handle post events here
 
 function postRequest(request, response, callback) {
     var queryData = "";
-    if(typeof callback !== 'function') return null;
+    if (typeof callback !== 'function') return null;
 
-    if(request.method == 'POST') {
-        request.on('data', function(data) {
+    if (request.method == 'POST') {
+        request.on('data', function (data) {
             queryData += data;
-            if(queryData.length > 1e6) {
+            if (queryData.length > 1e6) {
                 queryData = "";
-                response.writeHead(413, {'Content-Type': 'text/plain'}).end();
+                response.writeHead(413, {
+                    'Content-Type': 'text/plain'
+                }).end();
                 request.connection.destroy();
             }
         });
 
-        request.on('end', function() {
-            response.post = querystring.parse(queryData);
-            callback();
+        request.on('end', function () {
+            callback(querystring.parse(queryData));
         });
 
     } else {
-        response.writeHead(405, {'Content-Type': 'text/plain'});
+        response.writeHead(405, {
+            'Content-Type': 'text/plain'
+        });
         response.end();
     }
 }
-//  console.log('meow');
-//var Cat = mongoose.model('Cat', { name: String });
-var Product = mongoose.model('Product', { barcode: String, name: String });
-var Image = mongoose.model('Image', { product_id: String, by: String, image: String });
-var Comment = mongoose.model('Comment', { product_id: String, comment: String, by: String, date: String });
-//var Testmodel = mongoose.model('Testmodel', { pid: String });
 
+function notFound(response) {
+    console.log("not found\n");
+    response.writeHead(404, "Not Found", {
+       'Content-Type': 'text/plain'
+    });
+    response.end();
+}
 
-//  console.log('meow');
-/*var kitty = new Cat({ name: 'Zildjian' });
-Cat.find(function (err, kittens) {
-  console.log(err);
-  //if (err) // TODO handle err
-  console.log(kittens);
-})*/
+function checkIfProductExists(url, response, callback) {
+    if (url.product_id) {
+        Product.find({
+            _id: url.product_id
+        }, function (err, prod) {
+            console.log(prod);
+            if (err) {
+                notFound(response);
+            }
+            if (prod !== undefined) {
+                if (prod[0] === undefined) {
+                    notFound(response);
+                } else {
+                    callback();
+                }
+            } else {
+                notFound(response);
+            }
+            return false;
+        });
+    }
+}
 
-	            //var new_image = new Image({ product_id: "523e9ddc408124dc0c000001", by: "asfs", image: "asffs" });
-/*	            var new_test = new Testmodel({ pid: "523e9ddc408124dc0c000001"});
-	            new_test.save(function (err) {
-	                if (err) { console.log("image not saved\n"); }
-	                else { console.log("image saved\n"); }
-	            });
-	            console.log("asf");
-                    Testmodel.find(function (err, test) {
-                        console.log(test);
-                    });*/
-//	            process.exit(1);
-// Load the http module to create an http server.
-var http = require('http');
+function parseUrl(request_url) {
+    var args = request_url.split('/');
+    var url = {};
+    url.command = args[1];
+    url.product_id = args[2];
+    url.sub_command = args[3];
+    url.sub_command_id = args[4];
+    return url;
+}
 
-// Configure our HTTP server to respond with Hello World to all requests.
-var server = http.createServer(function (request, response) {
-    //response.writeHead(200, {"Content-Type": "text/plain"});
-    //console.log(util.inspect(request, false, null));
+function newProduct(response, postData) {
+    var new_product = new Product({
+        'barcode': postData.barcode,
+        'name': postData.name
+    });
+    console.log(new_product);
 
-    if (request.method == 'POST') {
-        postRequest(request, response, function() {
-            console.log(response.post);
-            if (response.post.barcode && response.post.name) {
-	            var new_product = new Product({'barcode': response.post.barcode, 'name': response.post.name});
-	            new_product.save(function (err) {
-                    if (err) { 
-                        console.log("product not saved\n"); 
-                        response.writeHead(404, "NOT FOUND", {'Content-Type': 'text/plain'});
-                    }
-                    else { console.log("product saved\n"); response.writeHead(200, "OK", {'Content-Type': 'text/plain'}); }
-                    response.end();
-	            });
-	            //console.log
-	        }
-	        if (response.post.comment && response.post.by && response.post.product_id) {
-	            var new_comment = new Comment(response.post);
-	            new_comment.save(function (err) {
-	                if (err) { console.log("comment not saved\n"); response.writeHead(404, "NOT FOUND", {'Content-Type': 'text/plain'}); }
-	                else { console.log("comment saved\n"); response.writeHead(200, "OK", {'Content-Type': 'text/plain'}); }
-	            });
-	        }/*
-	        if (response.post.product_id && response.post.image_by && response.post.url) {
-	            var new_image = new Image(response.post);
-	            new_image.save(function (err) {
-	                if (err) { console.log("image not saved\n"); }
-	                else { console.log("image saved\n") }
-	            });
-	        }*/
-	        if (response.post.product_id && response.post.by && response.post.image) {
-	            var new_image = new Image(response.post);
-	            new_image.save(function (err) {
-	                if (err) { console.log("image not saved\n"); response.writeHead(404, "NOT FOUND", {'Content-Type': 'text/plain'}); }
-	                else { console.log("image saved\n"); response.writeHead(200, "OK", {'Content-Type': 'text/plain'}); }
-	            });
-    	        /*fs.writeFile("/home/i/barcodeagent/img/"+response.post.product_id, response.post.image, function(err) {
-    	        new Buffer("SGVsbG8gV29ybGQ=".toString('ascii')
-                    if(err) {
-                        console.log(err);
-                    } else {
-                        console.log("The file was saved!");
-                    }
-                });*/ 
-	        }
-            response.writeHead(200, "OK", {'Content-Type': 'text/plain'});
+    new_product.save(function (err, new_product) {
+        if (err) {
+            console.log("product not saved\n");
+            response.writeHead(400, "Bad Request", {
+                'Content-Type': 'text/plain'
+            });
+            response.end();
+        } else {
+            console.log("product saved\n");
+            response.writeHead(201, "Created", {
+                'Content-Type': 'text/plain'
+            });
+            response.write("" + new_product._id);
+            response.end();
+        }
+    });
+}
+
+function newComment(url, response, postData) {
+    if (url.command != "products" || url.sub_command != 'comments') {
+        console.log("comment not saved, protocol error\n");
+        response.writeHead(400, "Bad Request", {
+            'Content-Type': 'text/plain'
+        });
+        response.end();
+    } else {
+        // add product_id to postData
+        postData.product_id = url.product_id;
+
+        // create comment from postData
+        var new_comment = new Comment(postData);
+        new_comment.save(function (err) {
+            if (err) {
+                console.log("comment not saved\n");
+                response.writeHead(404, "Not Found", {
+                    'Content-Type': 'text/plain'
+                });
+            } else {
+                console.log("comment saved\n");
+                response.writeHead(201, "Created", {
+                    'Content-Type': 'text/plain'
+                });
+            }
             response.end();
         });
     }
+}
+
+function newFlag(url, response, postData) {
+    if (url.command != "products" || url.sub_command != 'flags') {
+        console.log("flag not saved, protocol error\n");
+        response.writeHead(400, "Bad Request", {
+            'Content-Type': 'text/plain'
+        });
+        response.end();
+    } else {
+        // add product_id to postData
+        postData.product_id = url.product_id;
+
+        // create comment from postData
+        var new_flag = new Flag(postData);
+        new_flag.save(function (err) {
+            if (err) {
+                console.log("flag not saved\n");
+                response.writeHead(404, "Not Found", {
+                    'Content-Type': 'text/plain'
+                });
+            } else {
+                console.log("flag saved\n");
+                response.writeHead(201, "Created", {
+                    'Content-Type': 'text/plain'
+                });
+            }
+            response.end();
+        });
+    }
+}
+
+function newImage(url, response, postData) {
+    if (url.command != "products" || url.sub_command != 'images') {
+        console.log("comment not saved, protocol error\n");
+        response.writeHead(400, "Bad Request", {
+            'Content-Type': 'text/plain'
+        });
+        response.end();
+    } else {
+
+        // check if product by id exists
+        /*Product.findById(url.product_id, function (err, doc) {
+                        if (err) {
+                            response.writeHead(404, "Not Found", {
+                                'Content-Type': 'text/plain'
+                            });
+                            console.log("here"+url.product_id);
+                            response.end();
+                        }
+                    })*/
+
+        var regex = /^data:.+\/(.+);base64,(.*)$/;
+        var path = "products/" + url.product_id;
+
+        //if dir not exists, create it
+        mkdirp(path, function (err) {
+            if (err) {
+                // do something!
+            }
+        });
+
+        console.log(new Date().getTime());
+        var matches = postData.image.match(regex);
+        var ext = matches[1];
+        var data = matches[2];
+        // filename is the number of millseconds since epoch
+        var filename = new Date().getTime();
+        var buffer = new Buffer(data, 'base64');
+        fs.writeFileSync(path + '/' + filename + '.jpg', buffer);
+
+        // delete base64data from postData, dont save to database
+        delete(postData.image);
+
+        postData.product_id = url.product_id;
+        postData.image_url = path + "/" + filename + ".jpg";
+        console.log(postData);
+        var new_image = new Pictures(postData);
+        new_image.save(function (err) {
+            if (err) {
+                console.log("image not saved to database\n");
+                response.writeHead(400, "Bad Request", {
+                    'Content-Type': 'text/plain'
+                });
+            } else {
+                console.log("image saved\n");
+                response.writeHead(201, "OK", {
+                    'Content-Type': 'text/plain'
+                });
+            }
+            response.end();
+        });
+    }
+}
+
+function productByBarcode(url, response) {
+            if (url.product_id) {
+                Product.find({ barcode: url.product_id }, function (err, product) {
+                    if (err || product[0] === undefined) {
+                        console.log("barcode not found\n");
+                        response.writeHead(404, "NOT FOUND", {
+                           'Content-Type': 'text/plain'
+                        });
+                        response.end();
+                    } else {
+                        response.end(JSON.stringify(product));
+                    }
+                });
+            } else {
+                console.log("bad request, no bardcode provided\n");
+                response.writeHead(400, "Bad Request", {
+                    'Content-Type': 'text/plain'
+                });
+                response.end();
+            }
+}
+
+var server = http.createServer(function (request, response) {
+
+    var url = parseUrl(request.url);
     
-    if (request.method == 'GET') {
-        var args = request.url.split('/');
-        console.log(request.url.split('/'));
-        var command = args[1];
-        var product_id = args[2];
-        var sub_command = args[3];
-        var sub_command_id = args[4];
-        //console.log(command+" == products");
-        if (command == 'products') {
-//response.end(command);
-            if (product_id) {
-                if (sub_command == 'comments') {
-                    if (sub_command_id) {
-                        Comment.findById(sub_command_id, function (err, comment) {
-                            if (err) { response.writeHead(404, "NOT FOUND", {'Content-Type': 'text/plain'}); }
+    console.log(url);
+
+    if (request.method == 'POST') {
+        postRequest(request, response, function (postData) {
+            if (postData.barcode && postData.name && url.command == "products") {
+                newProduct(response, postData);
+            } else {
+                checkIfProductExists(url, response, function () {
+                    if (postData.comment && postData.by) {
+                        newComment(url, response, postData);
+                    } else if (postData.by && postData.image) {
+                        newImage(url, response, postData);
+                    } else if (postData.flag) {
+                        newFlag(url, response, postData);
+                    } else {
+                        console.log("bad request\n");
+                        response.writeHead(400, "Bad Request", {
+                            'Content-Type': 'text/plain'
+                        });
+                        response.end();
+                    }
+                });
+            }
+        });
+        //checkIfProductExists();
+    } else if (request.method == 'GET') {
+        if (url.command == "products") {
+            if (url.product_id) {
+                if (url.sub_command == "images") {
+                    if (url.sub_command_id) {
+                        Pictures.find({product_id: url.product_id}, function (err, pic) {
+                           response.end(JSON.stringify(pic));
+                        });
+                    }
+                    //console.log("here"+url.product_id);
+                    Pictures.find({product_id: url.product_id}, function (err, pic) {
+                       response.end(JSON.stringify(pic));
+                    });
+                
+                } else if (url.sub_command == "comments") {
+                    if (url.sub_command_id) {
+                        Comment.find({ _id: url.sub_command_id }, 
+                            function (err, comment) {
+                            response.end(JSON.stringify(comment));
+                        });
+                    } else {
+                        Comment.find(response, function (err, comment) {
                             response.end(JSON.stringify(comment));
                         });
                     }
-                    Comment.find(response, {'product_id': product_id}, function (err, comment) {
-                            if (err) { response.writeHead(404, "NOT FOUND", {'Content-Type': 'text/plain'}); }
-                        response.end(JSON.stringify(comment));
+                } else if (url.sub_command == "flags") {
+                    Flag.find({ product_id: url.product_id }, function (err, flags) {
+                        response.end(JSON.stringify(flags));
+                    });
+                } else {
+                    Product.find({ _id: url.product_id }, function (err, product) {
+                        response.end(JSON.stringify(product));
                     });
                 }
-                if (sub_command == 'img') {
-                    if (sub_command_id) {
-                        Image.findById(sub_command_id, function (err, image) {
-                            if (err) { response.writeHead(404, "NOT FOUND", {'Content-Type': 'text/plain'}); }
-                            response.end(JSON.stringify(image));
-                        });
-                    }
-                    Image.find(response, {'product_id' : product_id}, function (err, image) {
-                            if (err) { response.writeHead(404, "NOT FOUND", {'Content-Type': 'text/plain'}); }
-                        response.end(JSON.stringify(image));
-                    });
-                }
-                console.log("product id: "+product_id);
-                Product.findById(product_id, function (err, product) {
-                            if (err) { response.writeHead(404, "NOT FOUND", {'Content-Type': 'text/plain'}); }
-                    console.log(product);
-        		    response.end(JSON.stringify(product));
-                });
             } else {
-                Product.find(response, function (err, product) {
-                            if (err) { response.writeHead(404, "NOT FOUND", {'Content-Type': 'text/plain'}); }
-                    //console.log(response);
-    //    		response.writeHead(200, {"Content-Type": "text/plain"});
-    //response.end("lol");
-        		    response.end(JSON.stringify(product));
+                console.log("bad request, no product id provided\n");
+                response.writeHead(400, "Bad Request", {
+                    'Content-Type': 'text/plain'
                 });
-	        }
+                response.end();
+            }
+        } else if (url.command == "barcodes") {
+            productByBarcode(url, response);
         }
     }
-            //response.end();
-//console.log(body);
-  //response.end(request.url + " "+ request.method + " " + request.barcode + " " + request.name + "\n");
-/*response.end('{'
-+' "name": "Erikois RuokaHerkku",'
-+'  "image": {'
-+'    "by": "kayttäjä-1",'
-+'    "date": "2013-05-10 1208",'
-+'    "url": "http://localhost/products/1/img/1.jpg"'
-+'  },'
-+'  "comments": ['
-+'    {"by": "käyttäjä-1", "date": "2013-05-10 1210", "text": "Hyvä tuote!"},'
-+'    {"by": "käyttäjä-2", "date": "2013-05-12 1652", "text": "Ei kun huono tuote!"}'
-+'  ]'
-+'}');*/
 });
 
-// Listen on port 8001, IP defaults to 127.0.0.1
-server.listen(8001);
+// Listen on port 8002, IP defaults to 127.0.0.1
+server.listen(8000);
 
 // Put a friendly message on the terminal
-console.log("Server running at http://127.0.0.1:8001/");
-/*kitty.save(function (err) {
-  if (err) // ...
-  console.log('meow');
-});*/
+console.log("Server running at http://127.0.0.1:8000/");
