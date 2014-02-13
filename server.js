@@ -125,7 +125,9 @@ function newProduct(response, postData) {
             response.writeHead(201, "Created", {
                 'Content-Type': 'text/plain'
             });
-            response.write("" + new_product._id);
+
+            var product_data = {_id: new_product._id};
+            response.write(JSON.stringify(product_data));
             response.end();
         }
     });
