@@ -258,15 +258,16 @@ function newImage(url, response, postData) {
 
 function productByBarcode(url, response) {
             if (url.product_id) {
-                Product.find({ barcode: url.product_id }, function (err, product) {
-                    if (err || product[0] === undefined) {
+                Product.find({ barcode: url.product_id }, function (err, products) {
+                    if (err || products[0] === undefined) {
                         console.log("barcode not found\n");
                         response.writeHead(404, "NOT FOUND", {
                            'Content-Type': 'text/plain'
                         });
                         response.end();
                     } else {
-                        response.end(JSON.stringify(product));
+                        var responseObject = {"products": products};
+                        response.end(JSON.stringify(responseObject));
                     }
                 });
             } else {
