@@ -338,7 +338,7 @@ var server = http.createServer(function (request, response) {
                     });
                 } else {
                     Product.find({ _id: url.product_id }, function (err, product) {
-                        response.end(JSON.stringify(product));
+                        response.end(JSON.stringify(product[0]));
                     });
                 }
             } else {
